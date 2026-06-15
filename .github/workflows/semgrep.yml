@@ -1,0 +1,60 @@
+name: Semgrep
+
+on:
+  workflow_call: 
+
+jobs:
+  semgrep:
+    name: semgrep/changed-files
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mark repository as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Get changed files
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "New branch push detected. Listing files from current commit."
+            git diff-tree --no-commit-id --name-only --diff-filter=ACMRT -r "$AFTER" > changed_files.txt
+          else
+            git diff --name-only --diff-filter=ACMRT "$BEFORE" "$AFTER" > changed_files.txt
+          fi
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+      - name: Run Semgrep Secrets on changed files only
+        shell: bash
+        run: |
+          if [ ! -s changed_files.txt ]; then
+            echo "No changed files to scan."
+            exit 0
+          fi
+
+          INCLUDE_FLAGS=()
+          while IFS= read -r file; do
+            INCLUDE_FLAGS+=(--include="$file")
+          done < changed_files.txt
+          export SEMGREP_REPO_DISPLAY_NAME="tmp_repo"
+          semgrep ci \
+            --secrets \
+            --quiet \
+            "${INCLUDE_FLAGS[@]}"
