@@ -54,7 +54,7 @@ jobs:
             INCLUDE_FLAGS+=(--include="$file")
           done < changed_files.txt
           export SEMGREP_REPO_DISPLAY_NAME="tmp_repo"
+          semgrep install-semgrep-pro
           semgrep ci \
             --secrets \
-            --quiet \
             "${INCLUDE_FLAGS[@]}"
